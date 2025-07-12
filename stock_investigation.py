@@ -24,7 +24,8 @@ if stock_file and order_file:
         stock.columns = stock.loc[6]
         stock.columns = [str(col).strip().lower().replace(' ', '_').replace('.', '').replace("'", '') for col in stock.columns]
         stock = stock.loc[7:].reset_index(drop=True)
-
+        stock = stock.rename(columns={'name': 'item_name'})
+        
         # Rename unnamed columns
         new_columns = []
         counter = 0
@@ -39,8 +40,8 @@ if stock_file and order_file:
         stock['on_hand_qty'] = stock['on_hand_qty'].fillna(stock.get('na_3'))
         stock = stock.drop(columns=[col for col in ['na_1', 'na_2', 'na_3'] if col in stock.columns])
         stock = stock.dropna(how='all')
-        stock = stock[stock['name'].notna() & (stock['actual_qty'] != "Actual Q'ty")].reset_index(drop=True)
-        stock['item_no'] = stock['item_no'].str.strip().str.upper()
+        stock = stock[stock['item_name'].notna() & (stock['actual_qty'] != "Actual Q'ty")].reset_index(drop=True)
+        stock['item_name'] = stock['item_name'].str.strip().str.upper()
 
         # --- Load Order File ---
         if order_file.name.endswith("csv"):
@@ -51,54 +52,59 @@ if stock_file and order_file:
         order_df = order_df.dropna(how='all', axis=1).dropna(how='all').reset_index(drop=True)
 
         for col in order_df.columns:
-            if 'Unnamed' in col and 'item_no' in order_df[col].astype(str).str.lower().values:
-                name_row = order_df[order_df[col].astype(str).str.lower() == 'item_no'].index[0]
+            if 'Unnamed' in col and 'item_name' in order_df[col].astype(str).str.lower().values:
+                name_row = order_df[order_df[col].astype(str).str.lower() == 'item_name'].index[0]
                 order_df.columns = order_df.loc[name_row]
                 order_df = order_df.loc[name_row + 1:].reset_index(drop=True)
                 break
 
         order_df.columns = [str(col).lower().strip().replace('.', '').replace(' ', '_') for col in order_df.columns]
 
-        if 'item_no' not in order_df.columns:
-            st.error("❌ 'item_no' column not found in the order file. Please reupload with correct headers.")
+        if 'item_name' not in order_df.columns:
+            st.error("❌ 'item_name' column not found in the order file. Please reupload with correct headers.")
             st.stop()
 
-        order_df['item_no'] = order_df['item_no'].str.strip().str.upper()
+        order_df['item_name'] = order_df['item_name'].str.strip().str.upper()
+
+        # --- Check and show duplicates ---
+        if order_df['item_name'].duplicated().any():
+            st.warning("⚠️ Duplicated items found in the order file. They will be dropped automatically.")
+            st.dataframe(order_df[order_df['item_name'].duplicated(keep=False)])
+            order_df = order_df.drop_duplicates(subset='item_name', keep='first')
 
         # --- Categorize ---
-        consume = [item for item in stock['item_no'].unique() if item.startswith('(C)')]
-        pharma = [item for item in stock['item_no'].unique() if item not in consume]
-        pharma_df = stock[stock['item_no'].isin(pharma)]
-        consume_df = stock[stock['item_no'].isin(consume)]
+        consume = [item for item in stock['item_name'].unique() if item.startswith('(C)')]
+        pharma = [item for item in stock['item_name'].unique() if item not in consume]
+
+        consume_order = [item for item in order_df['item_name'].unique() if item.startswith('(C)')]
+        pharma_order = [item for item in order_df['item_name'].unique() if item not in consume_order]
 
         # --- Stock Summary ---
-        total_items = stock.shape[0]
-        total_pharma = pharma_df.shape[0]
-        total_consume = consume_df.shape[0]
-
         st.markdown("### 📊 Stock Summary")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total Items", total_items)
-        col2.metric("Pharma Items", total_pharma)
-        col3.metric("Consumables", total_consume)
+        col1.metric("Total Items", stock.shape[0])
+        col2.metric("Pharma Items", len(pharma))
+        col3.metric("Consumables", len(consume))
 
-        # --- Check for duplicates ---
-        if order_df['item_no'].duplicated().any():
-            st.warning("⚠️ Duplicated items found in the order file.")
-            st.dataframe(order_df[order_df['item_no'].duplicated(keep=False)])
+        # --- Order Summary ---
+        st.markdown("### 📦 Desired Order Summary")
+        col4, col5, col6 = st.columns(3)
+        col4.metric("Items in Desired Order", order_df.shape[0])
+        col5.metric("Pharma Items", len(pharma_order))
+        col6.metric("Consumables", len(consume_order))
 
         # --- Merge stock with order ---
         final = order_df.merge(
-            stock[['item_no', 'name', 'on_hand_qty', 'actual_qty']],
-            on='item_no', how='left', indicator=True
+            stock[['item_no', 'item_name', 'on_hand_qty', 'actual_qty']],
+            on='item_name', how='left', indicator=True
         )
 
         # --- Check unmatched ---
         unmatched = final[final['_merge'] == 'left_only']
         if not unmatched.empty:
             st.error("Some items in the desired order file could not be found in the system stock file.")
-            not_found = unmatched['item_no'].tolist()
-            search_pool = stock['item_no'].unique().tolist()
+            not_found = unmatched['item_name'].tolist()
+            search_pool = stock['item_name'].unique().tolist()
             match_list = []
 
             for item in not_found:
@@ -112,38 +118,58 @@ if stock_file and order_file:
                 'Suggested Match': match_list
             })
 
-            all_indices = possible_matches['Index'].tolist()
-            select_all = st.checkbox("Select all unmatched items")
-
-            selected_indices = st.multiselect(
-                "Select the index of items to replace with suggested matches",
-                help="This will update the name and merge the stock quantities.",
-                options=all_indices,
-                default=all_indices if select_all else []
+            # Only allow selection of items with a suggested match
+            possible_matches['Has Match'] = possible_matches['Suggested Match'].astype(bool)
+            valid_matches_df = possible_matches[possible_matches['Has Match']]
+            valid_indices = valid_matches_df['Index'].tolist()
+            
+            if 'selected' not in st.session_state:
+                st.session_state.selected = []
+            
+            select_all = st.checkbox("Select all items with suggested matches")
+            
+            selected = st.multiselect(
+                "Select the index of items to replace with suggested matches:",
+                options=valid_indices,
+                default=valid_indices if select_all else st.session_state.selected,
+                key="multiselect"
             )
+            
+            # Sync session state
+            st.session_state.selected = selected
+            
+            selected_df = possible_matches[possible_matches['Index'].isin(selected)]
+            unselected_df = possible_matches[~possible_matches['Index'].isin(selected)]
+            
+            st.markdown("### ✅ Selected Matches (to apply)")
+            st.dataframe(selected_df)
+            
+            st.markdown("### ❌ Unselected or Unmatchable Items")
+            st.dataframe(unselected_df)
 
-            for i in selected_indices:
+            for i in selected:
                 original = possible_matches.at[i, 'Item Not Found']
                 replacement = possible_matches.at[i, 'Suggested Match']
-                final.loc[final['item_no'] == original, 'item_no'] = replacement
+                final.loc[final['item_name'] == original, 'item_name'] = replacement
 
             # Re-merge to update quantities and names
-            final = final.drop(columns=['name', 'on_hand_qty', 'actual_qty', '_merge'], errors='ignore')
+            final = final.drop(columns=['item_no', 'on_hand_qty', 'actual_qty', '_merge'], errors='ignore')
             final = final.merge(
-                stock[['item_no', 'name', 'on_hand_qty', 'actual_qty']],
-                on='item_no', how='left'
+                stock[['item_no', 'item_name', 'on_hand_qty', 'actual_qty']],
+                on='item_name', how='left'
             )
 
-            st.dataframe(possible_matches)
             st.markdown("""
-                ✅ Selected items will now show their stock quantities.<br>
-                ❌ Unselected unmatched items remain unchanged.
+                ✅ Selected items will now show their stock quantities.<br>❌ Unselected items remain unchanged.
             """, unsafe_allow_html=True)
 
         else:
             final = final.drop(columns=['_merge'])
 
-        # --- Download merged file ---
+        # --- Clean and download merged file ---
+        final = final.dropna(how='all').reset_index(drop=True)
+        final = final[['item_name', 'on_hand_qty', 'actual_qty']]
+        final.columns = ['Item Name', 'On Hand Quantity', 'Actual Quantity']
         buffer = io.BytesIO()
         final.to_csv(buffer, index=False)
         st.download_button("Download Merged File", data=buffer.getvalue(), file_name="merged_stock_order.csv")
