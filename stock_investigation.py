@@ -73,11 +73,8 @@ if stock_file and order_file:
             order_df = order_df.drop_duplicates(subset='item_name', keep='first')
 
         # --- Categorize ---
-        consume = [item for item in stock['item_name'].unique() if item.startswith('(C)')]
-        pharma = [item for item in stock['item_name'].unique() if item not in consume]
-
-        consume_order = [item for item in order_df['item_name'].unique() if item.startswith('(C)')]
-        pharma_order = [item for item in order_df['item_name'].unique() if item not in consume_order]
+        consume = [item for item in stock['item_no'].unique() if item.startswith('(C)')]
+        pharma = [item for item in stock['item_no'].unique() if item not in consume]
 
         # --- Stock Summary ---
         st.markdown("### 📊 Stock Summary")
@@ -88,10 +85,8 @@ if stock_file and order_file:
 
         # --- Order Summary ---
         st.markdown("### 📦 Desired Stock Order Summary")
-        col4, col5, col6 = st.columns(3)
+        col4 = st.columns(1)[0]
         col4.metric("Items in Desired Order", order_df.shape[0])
-        col5.metric("Pharma Items", len(pharma_order))
-        col6.metric("Consumables", len(consume_order))
 
         # --- Merge stock with order ---
         final = order_df.merge(
