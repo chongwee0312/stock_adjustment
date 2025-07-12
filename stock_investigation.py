@@ -14,7 +14,7 @@ st.sidebar.header("1. Upload Files")
 st.sidebar.info('Export from PowerClinic: Inventory Management -> Stock Management -> Stock Take -> Print -> Excel')
 stock_file = st.sidebar.file_uploader("Upload Stock File (.xls)", type="xls")
 st.sidebar.info('Your Self-Defined Stock Order')
-order_file = st.sidebar.file_uploader("Upload Desired Order File (.xls, .xlsx, .csv)", type=["xls", "xlsx", "csv"])
+order_file = st.sidebar.file_uploader("Upload Desired Stock Order File (.xls, .xlsx, .csv)", type=["xls", "xlsx", "csv"])
 
 if stock_file and order_file:
     try:
@@ -87,7 +87,7 @@ if stock_file and order_file:
         col3.metric("Consumables", len(consume))
 
         # --- Order Summary ---
-        st.markdown("### 📦 Desired Order Summary")
+        st.markdown("### 📦 Desired Stock Order Summary")
         col4, col5, col6 = st.columns(3)
         col4.metric("Items in Desired Order", order_df.shape[0])
         col5.metric("Pharma Items", len(pharma_order))
