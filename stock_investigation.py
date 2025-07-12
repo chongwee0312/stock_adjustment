@@ -108,15 +108,15 @@ if stock_file and order_file:
                 match_list.append(matched)
 
             possible_matches = pd.DataFrame({
-                'Index': range(len(not_found)),
                 'Item Not Found': not_found,
                 'Suggested Match': match_list
             })
+            possible_matches.index.name = 'index'
 
             # Only allow selection of items with a suggested match
             possible_matches['Has Match'] = possible_matches['Suggested Match'].astype(bool)
             valid_matches_df = possible_matches[possible_matches['Has Match']]
-            valid_indices = valid_matches_df['Index'].tolist()
+            valid_indices = valid_matches_df.index.tolist()
             
             if 'selected' not in st.session_state:
                 st.session_state.selected = []
@@ -133,8 +133,8 @@ if stock_file and order_file:
             # Sync session state
             st.session_state.selected = selected
             
-            selected_df = possible_matches[possible_matches['Index'].isin(selected)]
-            unselected_df = possible_matches[~possible_matches['Index'].isin(selected)]
+            selected_df = possible_matches.loc[selected]
+            unselected_df = possible_matches.drop(index=selected)
             
             st.markdown("### ✅ Selected Matches (to apply)")
             st.dataframe(selected_df)
