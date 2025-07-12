@@ -11,7 +11,9 @@ st.title("📊 Stock and Order Matcher")
 
 # --- File upload section ---
 st.sidebar.header("1. Upload Files")
+st.sidebar.info('Export from PowerClinic: Inventory Management -> Stock Management -> Stock Take -> Print -> Excel')
 stock_file = st.sidebar.file_uploader("Upload Stock File (.xls)", type="xls")
+st.sidebar.info('Your Self-Defined Stock Order')
 order_file = st.sidebar.file_uploader("Upload Desired Order File (.xls, .xlsx, .csv)", type=["xls", "xlsx", "csv"])
 
 if stock_file and order_file:
