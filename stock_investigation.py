@@ -52,8 +52,10 @@ if stock_file and order_file:
         order_df = order_df.dropna(how='all', axis=1).dropna(how='all').reset_index(drop=True)
 
         for col in order_df.columns:
-            if 'Unnamed' in col and 'item_name' in order_df[col].astype(str).str.lower().values:
-                name_row = order_df[order_df[col].astype(str).str.lower() == 'item_name'].index[0]
+            unique = order_df[col].unique()
+            unique = [str(item).strip().lower().replace('.', '').replace(' ', '_') for item in unique]
+            if 'item_name' in unique:
+                name_row = unique.index('item_name')
                 order_df.columns = order_df.loc[name_row]
                 order_df = order_df.loc[name_row + 1:].reset_index(drop=True)
                 break
