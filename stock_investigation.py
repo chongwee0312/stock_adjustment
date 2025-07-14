@@ -47,25 +47,41 @@ if stock_file and order_file:
         if order_file.name.endswith("csv"):
             order_df = pd.read_csv(order_file)
         else:
-            order_df = pd.read_excel(order_file)
+            order_data = pd.read_excel(order_file, sheet_name=None)
 
+        if not order_file.name.endswith("csv"):
+            order_df = pd.DataFrame()
+            
+            for sheet_name, df in order_data.items():
+                order_df = pd.concat([order_df, df]).reset_index(drop=True)
+        
         order_df = order_df.dropna(how='all', axis=1).dropna(how='all').reset_index(drop=True)
 
         for col in order_df.columns:
             unique = order_df[col].unique()
             unique = [str(item).strip().lower().replace('.', '').replace(' ', '_') for item in unique]
+            
             if 'item_name' in unique:
                 name_row = unique.index('item_name')
                 order_df.columns = order_df.loc[name_row]
                 order_df = order_df.loc[name_row + 1:].reset_index(drop=True)
-                break
-
+                break        
+        
         order_df.columns = [str(col).lower().strip().replace('.', '').replace(' ', '_') for col in order_df.columns]
 
         if 'item_name' not in order_df.columns:
             st.error("❌ 'item_name' column not found in the order file. Please reupload with correct headers.")
             st.stop()
 
+        if not order_file.name.endswith("csv"):
+            drop_loc = []
+            for item in order_df['item_name'].unique():
+                item_check = str(item).lower().strip().replace(' ', '_')
+                if item_check == 'item_name':
+                    drop_loc.append(order_df['item_name'].unique().tolist().index(item))
+            
+            order_df = order_df.drop(drop_loc)
+            
         order_df['item_name'] = order_df['item_name'].str.strip().str.upper()
 
         # --- Check and show duplicates ---
