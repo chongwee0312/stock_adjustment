@@ -74,14 +74,23 @@ if stock_file and order_file:
             st.stop()
 
         if not order_file.name.endswith("csv"):
-            drop_loc = []
-            for item in order_df['item_name'].unique():
-                item_check = str(item).lower().strip().replace(' ', '_')
-                if item_check == 'item_name':
-                    drop_loc.append(order_df['item_name'].unique().tolist().index(item))
-            
+            # Concatenate sheets into one df
+            drop_loc = [
+                i for i, x in enumerate(order_df['item_name']) 
+                if str(x).lower().strip().replace(' ', '_') == 'item_name'
+            ]
             order_df = order_df.drop(drop_loc)
+
+            # Separate and save sheets
+            sheet_total = len(drop_loc) + 1
+            sheets = {}
+            sheet_indices = [0] + drop_loc + [order_df.tail(1).index.values[0]]
             
+            for i, name in zip(range(sheet_total), order_data.keys()):
+                sheet_start = sheet_indices[i]
+                sheet_end = sheet_indices[i + 1]
+                sheets[name] = order_df.loc[sheet_start:sheet_end]
+        
         order_df['item_name'] = order_df['item_name'].str.strip().str.upper()
 
         # --- Check and show duplicates ---
@@ -103,8 +112,9 @@ if stock_file and order_file:
 
         # --- Order Summary ---
         st.markdown("### 📦 Desired Stock Order Summary")
-        col4 = st.columns(1)[0]
-        col4.metric("Items in Desired Order", order_df.shape[0])
+        cols = st.columns(sheet_total)
+        for i, name in enumerate(sheets.keys()):
+            cols[i].metric(f"{name}", f"{sheets[name].shape[0]}")
 
         # --- Merge stock with order ---
         final = order_df.merge(
@@ -183,10 +193,17 @@ if stock_file and order_file:
         final = final.dropna(how='all').reset_index(drop=True)
         final = final[['item_name', 'on_hand_qty', 'actual_qty']]
         final.columns = ['Item Name', 'On Hand Quantity', 'Actual Quantity']
+        
         buffer = io.BytesIO()
-        final.to_csv(buffer, index=False)
-        st.download_button("Download Merged File", data=buffer.getvalue(), file_name="merged_stock_order.csv")
-
+        if order_file.name.endswith("csv"):
+            final.to_csv(buffer, index=False)
+            st.download_button("Download Merged File", data=buffer.getvalue(), file_name="my_order_stock_quantity.csv")
+        else:
+            with pd.ExcelWriter(buffer) as writer:
+                for name, sheet in sheets.items():
+                    sheet.to_excel(writer, sheet_name=name, index=False)
+            st.download_button("Download Merged File", data=buffer.getvalue(), file_name="my_order_stock_quantity.xlsx")
+            
     except Exception as e:
         st.error(f"❌ An error occurred while processing the files: {e}")
 
