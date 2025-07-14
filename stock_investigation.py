@@ -144,7 +144,7 @@ if stock_file and order_file:
             selected = st.multiselect(
                 "Select the index of items to replace with suggested matches:",
                 options=valid_indices,
-                default=valid_indices if select_all else st.session_state.selected,
+                default=valid_indices if select_all else [i for i in st.session_state.selected if i in valid_indices],
                 key="multiselect"
             )
             
