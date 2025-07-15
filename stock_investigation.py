@@ -132,9 +132,20 @@ if stock_file and order_file:
 
             for item in not_found:
                 match = process.extractOne(item, search_pool)
-                matched = match[0] if match and match[1] >= 90 else ''
-                match_list.append(matched)
+                matched = match[0] if match and match[1] >= 90 else ''                
 
+                if matched == '':
+                    try:
+                        matches = []
+                        for word in item.split():
+                            matches.extend(stock[stock['item_name'].str.contains(word, regex=False)]['item_name'].unique().tolist())
+                        matched = process.extractOne(item, matches, scorer=fuzz.token_set_ratio)
+                        matched = matched[0]
+                    except:
+                        matched = ''
+                
+                match_list.append(matched)
+            
             possible_matches = pd.DataFrame({
                 'Item Not Found': not_found,
                 'Suggested Match': match_list
