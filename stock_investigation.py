@@ -199,8 +199,13 @@ if stock_file and order_file:
             final.to_csv(buffer, index=False)
             st.download_button("Download Merged File", data=buffer.getvalue(), file_name="my_order_stock_quantity.csv")
         else:
+            final_sheets = {}
+            for i, name in zip(range(sheet_total), order_data.keys()):
+                sheet_start = sheet_indices[i]
+                sheet_end = sheet_indices[i + 1]
+                final_sheets[name] = final.loc[sheet_start:sheet_end]
             with pd.ExcelWriter(buffer) as writer:
-                for name, sheet in sheets.items():
+                for name, sheet in final_sheets.items():
                     sheet.to_excel(writer, sheet_name=name, index=False)
             st.download_button("Download Merged File", data=buffer.getvalue(), file_name="my_order_stock_quantity.xlsx")
             
